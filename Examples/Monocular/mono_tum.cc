@@ -33,6 +33,29 @@ using namespace std;
 void LoadImages(const string &strFile, vector<string> &vstrImageFilenames,
                 vector<double> &vTimestamps);
 
+string type2str(int type) {
+  string r;
+
+  uchar depth = type & CV_MAT_DEPTH_MASK;
+  uchar chans = 1 + (type >> CV_CN_SHIFT);
+
+  switch ( depth ) {
+    case CV_8U:  r = "8U"; break;
+    case CV_8S:  r = "8S"; break;
+    case CV_16U: r = "16U"; break;
+    case CV_16S: r = "16S"; break;
+    case CV_32S: r = "32S"; break;
+    case CV_32F: r = "32F"; break;
+    case CV_64F: r = "64F"; break;
+    default:     r = "User"; break;
+  }
+
+  r += "C";
+  r += (chans+'0');
+
+  return r;
+}
+
 int main(int argc, char **argv)
 {
     if(argc != 4)
@@ -60,6 +83,15 @@ int main(int argc, char **argv)
     cout << "Start processing sequence ..." << endl;
     cout << "Images in the sequence: " << nImages << endl << endl;
 
+    // Open a file to write all position poses >>>
+
+    ofstream posestream;
+    posestream.open("Trajectory.txt");
+    posestream << fixed;
+
+    // <<<
+    
+
     // Main loop
     cv::Mat im;
     for(int ni=0; ni<nImages; ni++)
@@ -82,7 +114,15 @@ int main(int argc, char **argv)
 #endif
 
         // Pass the image to the SLAM system
-        SLAM.TrackMonocular(im,tframe);
+        cv::Mat pose = SLAM.TrackMonocular(im,tframe);
+        //string ty =  type2str( pose.type() );
+        //printf("Matrix: %s %dx%d \n", ty.c_str(), pose.cols, pose.rows );
+        //posestream << vstrImageFilenames[ni] << setprecision(7) << "," << pose.at<float>(0,3) << "," << pose.at<float>(1,3) << "," << pose.at<float>(2,3) << endl;
+        if (pose.cols == 4 && pose.rows == 4)
+        {
+            posestream << vstrImageFilenames[ni] << setprecision(7) << "," << pose.at<float>(0,3) << "," << pose.at<float>(1,3) << "," << pose.at<float>(2,3) << endl;
+            cout << vstrImageFilenames[ni] << setprecision(7) << "," << pose.at<float>(0,3) << "," << pose.at<float>(1,3) << "," << pose.at<float>(2,3) << endl;
+        }
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -107,6 +147,7 @@ int main(int argc, char **argv)
 
     // Stop all threads
     SLAM.Shutdown();
+    posestream.close();
 
     // Tracking time statistics
     sort(vTimesTrack.begin(),vTimesTrack.end());
@@ -121,6 +162,7 @@ int main(int argc, char **argv)
 
     // Save camera trajectory
     SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");
+    // SLAM.SaveTrajectoryTUM("Trajectory.txt");
 
     return 0;
 }
